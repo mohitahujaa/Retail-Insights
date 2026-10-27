@@ -1,0 +1,13 @@
+# R session files
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+
+# Derived outputs (regenerate with scripts/run_analysis.R)
+data/processed/*
+!data/processed/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
