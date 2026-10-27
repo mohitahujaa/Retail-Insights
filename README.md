@@ -108,9 +108,11 @@ RetailPulse/
 │   ├── testthat.R             test runner
 │   └── testthat/              fixtures and tests (validation, cleaning, RFM, segmentation,
 │                              lapse rules, pipeline and Shiny modules)
-└── docs/
-    ├── methodology.md         detailed method description for the report and viva
-    └── evaluation.md          actual results of the pipeline run
+├── docs/
+│   ├── methodology.md         detailed method description for the report and viva
+│   └── evaluation.md          actual results of the pipeline run
+├── Dockerfile                 container image: R 4.4.1, packages, analysis run at build time
+└── DOCKER.md                  step-by-step instructions for running in Docker locally
 ```
 
 ## 6. Installation
@@ -130,6 +132,11 @@ R.version.string   # check the R version
 ```
 
 ## 7. Running
+
+> Prefer not to install R? **[DOCKER.md](DOCKER.md)** explains how to build
+> and run everything in a Docker container on your PC
+> (`docker build -t retailpulse .` then
+> `docker run --rm -p 3838:3838 retailpulse`).
 
 Run these from the project root (the folder that contains `app.R`). In RStudio,
 use *Session → Set Working Directory → To Project Directory*, or `setwd()`.
