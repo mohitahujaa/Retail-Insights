@@ -121,3 +121,113 @@ rp_data_quality_table <- function(audit, cleaning) {
   out$count <- as.numeric(out$count)
   out
 }
+
+# Business utility of alternative segmentations --------------------------------
+#
+# Silhouette measures statistical separation only. These measures describe what
+# each segmentation lets a user do: how finely it divides customers and value,
+# whether its segments differ in lapse-signal rates, and whether it isolates
+# groups with a distinct suggested use. All values come from the data; the
+# suggested uses are interpretations (see RP_SEGMENT_USES).
+
+# Per-segment table for one k, combining the profile with lapse outcomes.
+rp_segment_utility_table <- function(seg, customers, k, ratio_threshold, fixed_days) {
+  view <- rp_segment_view(seg, customers, k)
+  lapse <- rp_apply_lapse_rules(view$customers, ratio_threshold, fixed_days)
+  by_seg <- lapse |>
+    dplyr::group_by(segment_id) |>
+    dplyr::summarise(
+      qualified_share = mean(cadence_qualified),
+      flagged = sum(hybrid_flag),
+      flagged_share = mean(hybrid_flag),
+      flagged_value = sum(monetary[hybrid_flag]),
+      .groups = "drop"
+    )
+  p <- dplyr::left_join(view$profile, by_seg, by = "segment_id")
+  data.frame(
+    k = view$k, segment_id = p$segment_id, segment = p$segment, segment_name = p$segment_name,
+    customers = p$customers, share_customers = p$share_customers,
+    median_recency = p$median_recency, median_frequency = p$median_frequency,
+    median_monetary = p$median_monetary, total_value = p$total_value, share_value = p$share_value,
+    qualified_share = p$qualified_share, flagged = p$flagged, flagged_share = p$flagged_share,
+    flagged_value = p$flagged_value, suggested_use = p$suggested_use,
+    stringsAsFactors = FALSE
+  )
+}
+
+# Summary measures for each k, in long form (k, measure, value, display).
+rp_segmentation_utility <- function(seg, customers, ks, ratio_threshold, fixed_days) {
+  ks <- intersect(as.integer(ks), seg$candidates$k[seg$candidates$valid])
+  segments <- do.call(rbind, lapply(ks, function(k) {
+    rp_segment_utility_table(seg, customers, k, ratio_threshold, fixed_days)
+  }))
+  summary <- do.call(rbind, lapply(ks, function(k) {
+    t <- segments[segments$k == k, ]
+    top <- t[which.max(t$median_monetary), ]
+    winback <- t$segment_name == "Historically valuable, currently inactive"
+    m <- list(
+      c("Mean silhouette (statistical separation)", seg$candidates$silhouette[seg$candidates$k == k], sprintf("%.3f", seg$candidates$silhouette[seg$candidates$k == k])),
+      c("Number of segments", k, as.character(k)),
+      c("Distinct suggested actions", length(unique(t$segment_name)), as.character(length(unique(t$segment_name)))),
+      c("Smallest segment (share of customers)", min(t$share_customers), rp_fmt_pct(min(t$share_customers))),
+      c("Largest segment (share of customers)", max(t$share_customers), rp_fmt_pct(max(t$share_customers))),
+      c("Highest-value segment: customers / value", top$share_value, paste0(rp_fmt_pct(top$share_customers), " of customers hold ", rp_fmt_pct(top$share_value), " of value")),
+      c("Lapse-signal rate range across segments", max(t$flagged_share) - min(t$flagged_share), paste0(rp_fmt_pct(min(t$flagged_share), 0), " to ", rp_fmt_pct(max(t$flagged_share), 0))),
+      c("Customers in a 'review for win-back' segment", sum(t$customers[winback]), if (any(winback)) paste0(rp_fmt_int(sum(t$customers[winback])), " (", rp_fmt_gbp(sum(t$total_value[winback])), " historical value)") else "none isolated"),
+      c("Flagged customers inside high-value active segment(s)", sum(t$flagged[t$segment_name == "High-value active customers"]), rp_fmt_int(sum(t$flagged[t$segment_name == "High-value active customers"])))
+    )
+    data.frame(
+      k = k, measure = vapply(m, `[`, "", 1),
+      value = as.numeric(vapply(m, `[`, "", 2)), display = vapply(m, `[`, "", 3),
+      stringsAsFactors = FALSE
+    )
+  }))
+  list(summary = summary, segments = segments)
+}
+
+# Plain-language findings comparing a coarser and a finer segmentation, built
+# only from the computed tables.
+rp_segmentation_insights <- function(seg, customers, k_a, k_b, utility) {
+  ka <- min(k_a, k_b)
+  kb <- max(k_a, k_b)
+  if (ka == kb) return(character())
+  sa <- utility$segments[utility$segments$k == ka, ]
+  sb <- utility$segments[utility$segments$k == kb, ]
+  sil <- function(k) seg$candidates$silhouette[seg$candidates$k == k]
+  cw <- rp_segment_crosswalk(seg, customers, ka, kb)
+
+  out <- sprintf(
+    "Separation: k = %d has mean silhouette %.3f, k = %d has %.3f. The coarser view is statistically cleaner; the finer view trades %.3f of silhouette for %d more segments.",
+    ka, sil(ka), kb, sil(kb), sil(ka) - sil(kb), kb - ka
+  )
+  for (i in seq_len(nrow(sb))) {
+    s <- sb$segment[i]
+    parts <- cw[cw$to == s, ]
+    parts <- parts[order(-parts$customers), ]
+    origin <- paste(sprintf("%s from %s", rp_fmt_pct(parts$share_of_to, 0), parts$from), collapse = ", ")
+    out <- c(out, sprintf(
+      "%s: %s customers (%s of value), lapse-signal rate %s; drawn %s at k = %d. Suggested use: %s",
+      s, rp_fmt_int(sb$customers[i]), rp_fmt_pct(sb$share_value[i]),
+      rp_fmt_pct(sb$flagged_share[i], 0), origin, ka, tolower(sb$suggested_use[i])
+    ))
+  }
+  for (i in seq_len(nrow(sa))) {
+    parts <- cw[cw$from == sa$segment[i], ]
+    if (nrow(parts) < 2) next
+    parts <- parts[order(-parts$customers), ]
+    out <- c(out, sprintf(
+      "At k = %d, %s (%s customers) is not homogeneous: at k = %d it splits into %s.",
+      ka, sa$segment[i], rp_fmt_int(sa$customers[i]), kb,
+      paste(sprintf("%s %s (%s)", rp_fmt_int(parts$customers), parts$to, rp_fmt_gbp(parts$value)), collapse = "; ")
+    ))
+  }
+  wa <- sum(sa$segment_name == "Historically valuable, currently inactive")
+  wb <- sum(sb$segment_name == "Historically valuable, currently inactive")
+  if (wb > wa) {
+    out <- c(out, sprintf(
+      "Only k = %d isolates a 'historically valuable, currently inactive' group, which is the natural target list for a win-back review; at k = %d these customers are mixed into broader segments.",
+      kb, ka
+    ))
+  }
+  out
+}
