@@ -1,0 +1,8 @@
+.git
+.gitignore
+data/processed/*
+!data/processed/.gitkeep
+.Rhistory
+.RData
+.Rproj.user
+*.Rproj
