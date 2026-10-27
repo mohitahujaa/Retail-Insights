@@ -89,8 +89,14 @@ mod_lapse_ui <- function(id, res) {
   )
 }
 
-mod_lapse_server <- function(id, res) {
+mod_lapse_server <- function(id, res, view) {
   shiny::moduleServer(id, function(input, output, session) {
+    # Segment labels follow the segmentation view; keep the filter in step.
+    shiny::observeEvent(view(), {
+      segments <- view()$profile$segment
+      shiny::updateSelectInput(session, "segment", choices = segments, selected = segments)
+    })
+
     ratio <- shiny::debounce(shiny::reactive({
       shiny::req(is.numeric(input$ratio_threshold))
       input$ratio_threshold
@@ -100,7 +106,7 @@ mod_lapse_server <- function(id, res) {
       input$fixed_days
     }), 300)
 
-    lapse <- shiny::reactive(rp_apply_lapse_rules(res$customers, ratio(), days()))
+    lapse <- shiny::reactive(rp_apply_lapse_rules(view()$customers, ratio(), days()))
     eval_a <- shiny::reactive(rp_evaluate_rules_same_population(lapse()))
     eval_b <- shiny::reactive(rp_evaluate_hybrid_policy(lapse()))
 

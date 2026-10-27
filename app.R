@@ -37,6 +37,12 @@ if (inherits(results, "error")) {
   )
   server <- function(input, output, session) {}
 } else {
+  valid_k <- results$segmentation$candidates$k[results$segmentation$candidates$valid]
+  view_choices <- stats::setNames(valid_k, ifelse(
+    valid_k == results$segmentation$k,
+    paste0("k = ", valid_k, " (best silhouette)"), paste0("k = ", valid_k)
+  ))
+
   ui <- page_navbar(
     title = "RetailPulse",
     theme = theme,
@@ -47,6 +53,11 @@ if (inherits(results, "error")) {
     nav_panel("Lapse Signals", mod_lapse_ui("lapse", results)),
     nav_panel("Methodology & Data Quality", mod_methodology_ui("methodology", results)),
     nav_spacer(),
+    nav_item(div(
+      class = "rp-view-select d-flex align-items-center gap-2",
+      tags$label(`for` = "view_k", class = "navbar-text small mb-0", "Segmentation view"),
+      selectInput("view_k", NULL, choices = view_choices, selected = results$segmentation$k, width = "200px")
+    )),
     nav_item(span(
       class = "navbar-text small",
       paste("Reference date", rp_fmt_date(results$reference_date))
@@ -54,9 +65,14 @@ if (inherits(results, "error")) {
   )
 
   server <- function(input, output, session) {
-    lapse_state <- mod_lapse_server("lapse", results)
-    mod_overview_server("overview", results, lapse_state)
-    mod_segments_server("segments", results)
+    # The segmentation view (k) chosen in the top bar drives every tab.
+    view <- reactive({
+      k <- if (is.null(input$view_k)) results$segmentation$k else input$view_k
+      rp_segment_view(results$segmentation, results$customers, k)
+    })
+    lapse_state <- mod_lapse_server("lapse", results, view)
+    mod_overview_server("overview", results, lapse_state, view)
+    mod_segments_server("segments", results, view, lapse_state)
     mod_methodology_server("methodology", results)
   }
 }

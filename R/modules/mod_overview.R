@@ -42,10 +42,7 @@ mod_overview_ui <- function(id, res) {
       bslib::card(
         bslib::card_header("Customers and purchase value by segment"),
         shiny::plotOutput(ns("segments"), height = "300px"),
-        bslib::card_footer(rp_note(sprintf(
-          "K-Means on log-transformed, standardised RFM; k = %d chosen by mean silhouette width (%.3f).",
-          res$segmentation$k, res$segmentation$silhouette
-        )))
+        bslib::card_footer(rp_note(shiny::textOutput(ns("segments_caption"), inline = TRUE)))
       )
     ),
     bslib::layout_columns(
@@ -62,8 +59,17 @@ mod_overview_ui <- function(id, res) {
   )
 }
 
-mod_overview_server <- function(id, res, lapse_state) {
+mod_overview_server <- function(id, res, lapse_state, view) {
   shiny::moduleServer(id, function(input, output, session) {
+    output$segments_caption <- shiny::renderText({
+      v <- view()
+      sprintf(
+        "K-Means on log-transformed, standardised RFM. Current view: k = %d (mean silhouette %.3f)%s.",
+        v$k, v$silhouette,
+        if (v$is_selected) ", the statistically selected solution" else sprintf("; statistically selected: k = %d", res$segmentation$k)
+      )
+    })
+
     output$kpi_flagged <- shiny::renderText({
       x <- lapse_state$lapse()
       paste0(rp_fmt_int(sum(x$hybrid_flag)), " (", rp_fmt_pct(mean(x$hybrid_flag)), ")")
@@ -89,7 +95,7 @@ mod_overview_server <- function(id, res, lapse_state) {
     })
 
     output$segments <- shiny::renderPlot(res = 96, {
-      p <- res$segmentation$profile
+      p <- view()$profile
       d <- rbind(
         data.frame(segment = p$segment, measure = "Share of customers", share = p$share_customers),
         data.frame(segment = p$segment, measure = "Share of purchase value", share = p$share_value)

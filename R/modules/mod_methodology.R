@@ -93,7 +93,11 @@ mod_methodology_ui <- function(id, res) {
             "Selection: %s. Candidates with a cluster smaller than %d customers are treated as degenerate. Selected k = %d (mean silhouette %.3f).",
             tolower(seg$selection_rule), cfg$min_cluster_size, seg$k, seg$silhouette
           )),
-          shiny::tags$li("Segments are profiled in original units and named from their medians relative to the median customer. Cluster numbers carry no meaning; display order is by median value.")
+          shiny::tags$li("Segments are profiled in original units and named from their medians relative to the median customer. Cluster numbers carry no meaning; display order is by median value."),
+          shiny::tags$li(sprintf(
+            "Segmentation view: every valid k is fitted once and kept. The selector in the top bar switches the whole dashboard to another k (for example k = 4 for finer business groups); the statistical choice (k = %d) stays the default. 'Business utility: compare k' on the Segments tab sets separation against usefulness: segment sizes, value concentration, lapse-signal rates, groups with a distinct suggested use, and how segments split between the two views.",
+            seg$k
+          ))
         )
       ),
       section(

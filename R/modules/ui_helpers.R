@@ -80,6 +80,8 @@ rp_theme_rules <- function() {
   .bslib-value-box .value-box-area .value-box-value { font-size: 1.55rem !important; }
   .bslib-value-box .value-box-area .value-box-title { font-size: .9rem !important; }
   table.dataTable { font-size: .875rem; }
+  .rp-view-select .form-group { margin-bottom: 0; }
+  .rp-view-select .selectize-input { padding: 4px 8px; min-height: 0; font-size: .875rem; }
   "
 }
 
