@@ -52,7 +52,8 @@ test_that("all four dashboard sections build their UI", {
 test_that("lapse module recalculates on threshold changes and exports the filtered list", {
   res <- synthetic_results()
   all_segments <- unique(res$customers$segment)
-  shiny::testServer(mod_lapse_server, args = list(res = res), {
+  view <- shiny::reactive(rp_segment_view(res$segmentation, res$customers, res$segmentation$k))
+  shiny::testServer(mod_lapse_server, args = list(res = res, view = view), {
     session$setInputs(
       ratio_threshold = 2, fixed_days = 60, segment = all_segments,
       category = c(RP_ALERT_PERSONALIZED, RP_ALERT_FALLBACK)
@@ -86,16 +87,21 @@ test_that("overview, segments and methodology servers render without error", {
     lapse = shiny::reactive(rp_apply_lapse_rules(res$customers, 2, 60)),
     ratio = shiny::reactive(2), days = shiny::reactive(60)
   )
-  shiny::testServer(mod_overview_server, args = list(res = res, lapse_state = lapse_state), {
+  view <- shiny::reactive(rp_segment_view(res$segmentation, res$customers, res$segmentation$k))
+  shiny::testServer(mod_overview_server, args = list(res = res, lapse_state = lapse_state, view = view), {
     expect_match(output$kpi_flagged, "%")
     expect_true(nchar(output$quality) > 0)
     expect_true(nchar(output$segment_lapse) > 0)
     expect_true(nchar(output$monthly$src) > 0)
   })
-  shiny::testServer(mod_segments_server, args = list(res = res), {
-    session$setInputs(alt_k = as.character(res$segmentation$k))
+  shiny::testServer(mod_segments_server, args = list(res = res, view = view, lapse_state = lapse_state), {
+    session$setInputs(k_a = "2", k_b = "4")
     expect_true(nchar(output$profile) > 0)
-    expect_true(nchar(output$alt_profile) > 0)
+    expect_match(output$utility_summary, "Mean silhouette")
+    expect_true(nchar(output$utility_segments) > 0)
+    expect_match(output$crosswalk, "from S1")
+    expect_true(nchar(output$utility_plot$src) > 0)
+    expect_equal(nrow(utils::read.csv(output$download_utility)), 2 + 4)
     expect_true(nchar(output$silhouette$src) > 0)
     expect_true(nchar(output$boxplots$src) > 0)
     csv <- utils::read.csv(output$download_customers)
@@ -105,5 +111,20 @@ test_that("overview, segments and methodology servers render without error", {
     expect_true(nchar(output$funnel) > 0)
     expect_true(nchar(output$matching) > 0)
     expect_equal(nrow(utils::read.csv(output$download_matching)), nrow(res$cleaning$cancellation_audit))
+  })
+})
+
+test_that("switching the segmentation view relabels customers everywhere", {
+  res <- synthetic_results()
+  k_view <- shiny::reactiveVal(2L)
+  view <- shiny::reactive(rp_segment_view(res$segmentation, res$customers, k_view()))
+  shiny::testServer(mod_lapse_server, args = list(res = res, view = view), {
+    session$setInputs(ratio_threshold = 2, fixed_days = 60, category = c(RP_ALERT_PERSONALIZED, RP_ALERT_FALLBACK))
+    session$elapse(1000)
+    expect_equal(length(unique(lapse()$segment)), 2)
+    k_view(4L)
+    session$flushReact()
+    expect_equal(length(unique(lapse()$segment)), 4)
+    expect_equal(sum(lapse()$hybrid_flag), sum(rp_apply_lapse_rules(res$customers, 2, 60)$hybrid_flag))
   })
 })

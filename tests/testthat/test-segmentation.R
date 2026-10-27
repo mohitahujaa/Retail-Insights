@@ -82,3 +82,40 @@ test_that("rule-based RFM comparison produces scores and agreement", {
   expect_equal(rp_adjusted_rand(c(1, 1, 2, 2), c("a", "a", "b", "b")), 1)
   expect_lt(abs(rp_adjusted_rand(rep(1:2, 50), rep(1:2, each = 50))), 0.05)
 })
+
+test_that("every valid k has stored assignments and a consistent view", {
+  s <- rp_segment_customers(three_groups(), rp_test_config())
+  expect_setequal(names(s$assignments), c("CustomerID", "k2", "k3", "k4"))
+  for (k in 2:4) {
+    v <- rp_segment_view(s, s$customers, k)
+    expect_equal(v$k, k)
+    expect_equal(length(unique(v$customers$segment)), k)
+    expect_equal(sort(v$profile$customers), sort(as.integer(table(v$customers$segment_id))))
+    expect_false(any(is.na(v$profile$suggested_use)))
+  }
+  expect_identical(rp_segment_view(s, s$customers, s$k)$customers$segment, s$customers$segment)
+  expect_error(rp_segment_view(s, s$customers, 9), "not a valid")
+})
+
+test_that("crosswalk and utility measures add up", {
+  s <- rp_segment_customers(three_groups(), rp_test_config())
+  cust <- rp_add_cadence(
+    transform(s$customers, frequency = pmax(frequency, 1), n_purchase_dates = frequency),
+    data.frame(CustomerID = character(), gap_days = integer())
+  )
+  cw <- rp_segment_crosswalk(s, cust, 2, 4)
+  expect_equal(sum(cw$customers), nrow(cust))
+  expect_equal(sum(cw$value), sum(cust$monetary))
+  expect_equal(as.numeric(tapply(cw$share_of_to, cw$to, sum)), rep(1, 4))
+
+  u <- rp_segmentation_utility(s, cust, c(2, 4), 2, 60)
+  expect_equal(sort(unique(u$segments$k)), c(2, 4))
+  expect_equal(nrow(u$segments), 6)
+  expect_equal(as.numeric(tapply(u$segments$share_value, u$segments$k, sum)), c(1, 1))
+  expect_equal(sum(u$segments$flagged[u$segments$k == 2]), sum(u$segments$flagged[u$segments$k == 4]))
+  expect_true(all(c("Mean silhouette (statistical separation)", "Lapse-signal rate range across segments") %in% u$summary$measure))
+
+  ins <- rp_segmentation_insights(s, cust, 2, 4, u)
+  expect_match(ins[1], "^Separation: k = 2 has mean silhouette")
+  expect_length(grep("Suggested use", ins), 4)
+})
