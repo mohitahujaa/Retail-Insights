@@ -210,10 +210,18 @@ rp_segment_customers <- function(customers, cfg = rp_config()) {
     prof <- rp_name_segments(rp_profile_segments(tmp), customers)
     cbind(k = as.integer(k), prof)
   }))
-  candidate_profiles <- candidate_profiles[
-    candidate_profiles$k %in% candidates$scores$k[candidates$scores$valid], ,
-    drop = FALSE
-  ]
+  valid_k <- candidates$scores$k[candidates$scores$valid]
+  candidate_profiles <- candidate_profiles[candidate_profiles$k %in% valid_k, , drop = FALSE]
+  candidate_profiles$suggested_use <- rp_segment_use(candidate_profiles$segment_name)
+
+  # Segment number of every customer under every valid k (same numbering as
+  # candidate_profiles), so the dashboard can switch views without refitting.
+  assignments <- data.frame(CustomerID = customers$CustomerID, stringsAsFactors = FALSE)
+  for (k in valid_k) {
+    assignments[[paste0("k", k)]] <- rp_renumber_clusters(
+      candidates$fits[[as.character(k)]]$cluster, customers$monetary
+    )
+  }
 
   sel_row <- candidates$scores[candidates$scores$k == sel$k, ]
   warnings <- c(
@@ -224,7 +232,7 @@ rp_segment_customers <- function(customers, cfg = rp_config()) {
 
   list(
     customers = customers, profile = profile, candidates = candidates$scores,
-    candidate_profiles = candidate_profiles,
+    candidate_profiles = candidate_profiles, assignments = assignments,
     k = sel$k, selection_rule = sel$rule, silhouette = sel_row$silhouette,
     centers = centers, warnings = warnings,
     preprocessing = list(
@@ -232,6 +240,52 @@ rp_segment_customers <- function(customers, cfg = rp_config()) {
       center = ctr, scale = scl
     )
   )
+}
+
+# Suggested business use for each segment name. These are interpretations of
+# the profile pattern, not effects measured in this data (the dataset records no
+# marketing actions).
+RP_SEGMENT_USES <- c(
+  "High-value active customers" = "Protect and retain: the core of current purchase value; watch personalized lapse signals closely.",
+  "Recent frequent, lower-value buyers" = "Grow basket size: engaged customers with low spend.",
+  "Recent occasional, higher-value buyers" = "Encourage repeat purchase: valuable orders that are not yet habitual.",
+  "Recent, low-activity customers" = "Nurture a second or third purchase: recently active but little history.",
+  "Historically valuable, currently inactive" = "Review for win-back: meaningful past value but activity has slowed or stopped.",
+  "Infrequent, inactive customers" = "Low-cost reactivation or deprioritise: little history and long inactivity."
+)
+
+rp_segment_use <- function(segment_name) unname(RP_SEGMENT_USES[segment_name])
+
+# Customers and profile for any valid k ("segmentation view").
+rp_segment_view <- function(seg, customers, k) {
+  k <- as.integer(k)
+  col <- paste0("k", k)
+  if (!col %in% names(seg$assignments)) stop("k = ", k, " is not a valid fitted candidate.", call. = FALSE)
+  profile <- seg$candidate_profiles[seg$candidate_profiles$k == k, , drop = FALSE]
+  profile$k <- NULL
+  rownames(profile) <- NULL
+  ids <- seg$assignments[[col]][match(customers$CustomerID, seg$assignments$CustomerID)]
+  customers$segment_id <- ids
+  customers$segment <- profile$segment[match(ids, profile$segment_id)]
+  list(
+    k = k, customers = customers, profile = profile,
+    silhouette = seg$candidates$silhouette[seg$candidates$k == k],
+    is_selected = k == seg$k
+  )
+}
+
+# How customers move between two segmentations: counts and value per cell.
+rp_segment_crosswalk <- function(seg, customers, k_from, k_to) {
+  a <- rp_segment_view(seg, customers, k_from)$customers
+  b <- rp_segment_view(seg, customers, k_to)$customers
+  d <- data.frame(from = a$segment, to = b$segment, value = a$monetary)
+  d |>
+    dplyr::group_by(to, from) |>
+    dplyr::summarise(customers = dplyr::n(), value = sum(value), .groups = "drop") |>
+    dplyr::group_by(to) |>
+    dplyr::mutate(share_of_to = customers / sum(customers)) |>
+    dplyr::ungroup() |>
+    as.data.frame()
 }
 
 # Optional extension: rule-based RFM quintile scores --------------------------
