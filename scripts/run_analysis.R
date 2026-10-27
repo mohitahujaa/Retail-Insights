@@ -34,6 +34,15 @@ write_out(res$rfm_summary, "rfm_summary.csv")
 write_out(res$segmentation$candidates, "cluster_candidates.csv")
 write_out(res$segmentation$profile, "segment_profiles.csv")
 write_out(res$segmentation$candidate_profiles, "segment_profiles_all_k.csv")
+write_out(res$segmentation$assignments, "segment_assignments_all_k.csv")
+seg <- res$segmentation
+compare_k <- intersect(c(seg$k, 4), seg$candidates$k[seg$candidates$valid])
+utility <- rp_segmentation_utility(seg, res$customers, compare_k, cfg$ratio_threshold, cfg$fixed_days)
+write_out(utility$summary, "segmentation_utility_summary.csv")
+write_out(utility$segments, "segmentation_utility_segments.csv")
+if (length(compare_k) == 2) {
+  write_out(rp_segment_crosswalk(seg, res$customers, min(compare_k), max(compare_k)), "segmentation_crosswalk.csv")
+}
 write_out(res$default_lapse$same_population$table, "lapse_comparison_A_same_population.csv")
 write_out(res$default_lapse$hybrid, "lapse_comparison_B_hybrid.csv")
 write_out(res$default_lapse$sensitivity, "lapse_sensitivity.csv")
@@ -60,6 +69,11 @@ cat(sprintf("\nComparison A (%s qualified customers), Jaccard = %.3f\n", rp_fmt_
 print(a$table, row.names = FALSE)
 cat("\nComparison B (hybrid policy, all customers)\n")
 print(res$default_lapse$hybrid, row.names = FALSE)
+cat(sprintf("\nBusiness utility, k = %s:\n", paste(compare_k, collapse = " vs k = ")))
+print(stats::reshape(utility$summary[, c("k", "measure", "display")], idvar = "measure", timevar = "k", direction = "wide"), row.names = FALSE)
+if (length(compare_k) == 2) {
+  cat("\n", paste("-", rp_segmentation_insights(seg, res$customers, compare_k[1], compare_k[2], utility), collapse = "\n"), "\n", sep = "")
+}
 if (!is.null(res$rule_comparison)) {
   cat(sprintf("\nRFM rules vs K-Means: Adjusted Rand Index = %.3f\n", res$rule_comparison$adjusted_rand))
 }
