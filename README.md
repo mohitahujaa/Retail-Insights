@@ -42,6 +42,7 @@ churn model: the dataset has no churn labels.
 | Non-product exclusion | Removes postage, carriage, manual, bank-charge and similar lines by exact StockCode match. |
 | RFM features | Customer recency, frequency (distinct invoices) and eligible historical purchase value, with descriptive statistics. |
 | K-Means segmentation | log1p transform and standardisation, then k = 2 to 6 with a fixed seed. k is chosen by silhouette width, and segments are profiled and named from their medians. |
+| Segmentation view and business utility | A switch in the top bar re-segments the whole dashboard at any valid k (for example k = 4); k = 2 stays the default. A "Business utility: compare k" tab sets two views side by side: value concentration, lapse-rate separation, suggested use per segment, how segments split, and generated findings. |
 | Purchase-lapse signals | A personalized inactivity-ratio rule, a fixed-day rule and a hybrid policy, with a plain-language explanation for each customer. |
 | Evaluation | Comparison A (both rules on the same population), Comparison B (the hybrid policy on all customers), threshold sensitivity, cluster diagnostics and data-quality counts. |
 | Dashboard | Four tabs: Overview, Customer Segments, Lapse Signals (adjustable thresholds, filters, CSV export) and Methodology & Data Quality. |
@@ -212,7 +213,7 @@ See `docs/evaluation.md` for the actual numbers.
 | Outcome | Evidence in the project |
 |---|---|
 | **CO2:** statistical analysis and visualisation | RFM descriptive statistics, skewness before and after log1p, Spearman correlations, distribution plots, monthly trend with the partial month marked, segment box plots, cadence scatter chart |
-| **CO3:** analysis of data-science methods | Rationale for the transform and scaling; silhouette-based choice of k and the trade-off at other k; the personalized rule versus the fixed rule (Comparisons A and B, sensitivity grid); rule-based RFM versus K-Means (ARI) |
+| **CO3:** analysis of data-science methods | Rationale for the transform and scaling; silhouette-based choice of k compared with business utility at k = 4 (separation against actionability); the personalized rule versus the fixed rule (Comparisons A and B, sensitivity grid); rule-based RFM versus K-Means (ARI) |
 | **CO4:** a data-science solution in R | A modular R pipeline (I/O, validation, cleaning, features, models, evaluation), a Shiny app with reactive thresholds and exports, automated tests, reproducible scripts |
 | CO1 (supporting) | Transaction classification policy, cancellation matching, the end-to-end workflow |
 
@@ -244,23 +245,28 @@ See `docs/evaluation.md` for the actual numbers.
    reversals.
 3. **Customer Segments → RFM distributions:** show the skew and why log1p is
    used.
-4. **Customer Segments → Model selection:** explain why silhouette picks k = 2.
-   Then use the selector to show the k = 4 profiles and discuss the trade-off.
-5. **Customer Segments → RFM rules vs K-Means:** compare the two methods using
+4. **Customer Segments → Model selection:** explain why silhouette picks
+   k = 2.
+5. **Customer Segments → Business utility: compare k:** compare k = 2 with
+   k = 4. Point out that k = 2's "High-value active" group hides 699 customers
+   (£1.45m) who have gone quiet, that lapse rates spread from 0% to 90% at
+   k = 4, and that k = 4 produces a 1,164-customer win-back-review list. Then
+   set **Segmentation view = k = 4** in the top bar and show every tab update.
+6. **Customer Segments → RFM rules vs K-Means:** compare the two methods using
    the ARI and the cross-tabulation.
-6. **Lapse Signals → Cadence chart:** explain the ratio line and the 60-day
+7. **Lapse Signals → Cadence chart:** explain the ratio line and the 60-day
    line visually.
-7. **Lapse Signals → A:** show that the two rules flag different customers, and
+8. **Lapse Signals → A:** show that the two rules flag different customers, and
    point out the high-value "personalized only" group.
-8. Move the sliders, show the numbers update, filter to one segment, read one
+9. Move the sliders, show the numbers update, filter to one segment, read one
    explanation, and download the CSV.
-9. Close on the limitations: these are signals for review, not churn
+10. Close on the limitations: these are signals for review, not churn
    predictions.
 
 ## 13. Verification status
 
 - **Done in development:** the full pipeline was run on the real workbook, the
-  test suite passed (175 expectations), the app was started headlessly, and all
+  test suite passed (207 expectations), the app was started headlessly, and all
   four tabs were rendered in a headless browser with no output errors. This used
   R 4.4.1 on Linux in a disposable Docker container (`rocker/r-ver:4.4.1`).
 - **Not yet done:** a run on your own laptop's R installation.

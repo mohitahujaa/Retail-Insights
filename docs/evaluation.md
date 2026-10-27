@@ -173,30 +173,66 @@ recent customers who account for 84% of eligible purchase value, and a majority
 of one-off or lapsed buyers. This is a strong concentration of value. It is
 also a coarse split.
 
-### 3.3 Alternative granularity (for discussion; not used downstream)
+### 3.3 Business utility: k = 2 compared with k = 4
 
-**k = 4** (silhouette 0.337):
+Silhouette measures statistical separation only. The dashboard's
+**Segmentation view** switch (top bar) and the **Business utility: compare k**
+tab let the evaluator judge usefulness as well. All figures below are computed
+from the data. Lapse rates use the default thresholds (ratio 2.0, 60 days).
 
-| Segment | Customers | Median R | Median F | Median value | Share of value |
-|---|---:|---:|---:|---:|---:|
-| S1: High-value active customers | 708 | 9 | 10 | £3,618 | 64.6% |
-| S2: Historically valuable, currently inactive | 1,164 | 54 | 4 | £1,341 | 23.5% |
-| S3: Recent, low-activity customers | 877 | 19 | 2 | £443 | 5.4% |
-| S4: Infrequent, inactive customers | 1,575 | 183 | 1 | £292 | 6.5% |
+| Measure | k = 2 | k = 4 |
+|---|---|---|
+| Mean silhouette (separation) | **0.432** | 0.337 |
+| Segments / distinct suggested actions | 2 / 2 | 4 / 4 |
+| Smallest and largest segment (share of customers) | 38.3% and 61.7% | 16.4% and 36.4% |
+| Highest-value segment | 38.3% of customers hold 84.4% of value | 16.4% of customers hold 64.6% of value |
+| Lapse-signal rate range across segments | 7% to 62% | **0% to 90%** |
+| Customers in a "review for win-back" segment | none isolated | **1,164 (£1,966,965 historical value)** |
+| Flagged customers inside the high-value active segment | 116 | 16 |
 
-At k = 4 the large S2 group from the k = 2 solution splits into recent
-newcomers and long-lapsed one-off buyers. A "historically valuable, currently
-inactive" group also appears, which is commercially more useful. The cost is a
-lower silhouette (0.337 against 0.432).
+**k = 4 segments:**
+
+| Segment | Customers | Median R / F / value | Share of value | Lapse-signal rate | Suggested use (interpretation) |
+|---|---:|---|---:|---:|---|
+| S1: High-value active customers | 708 | 9 days / 10 / £3,618 | 64.6% | 2.3% | Protect and retain; watch personalized lapse signals |
+| S2: Historically valuable, currently inactive | 1,164 | 54 days / 4 / £1,341 | 23.5% | 28.6% | Review for win-back |
+| S3: Recent, low-activity customers | 877 | 19 days / 2 / £443 | 5.4% | 0.5% | Nurture a second or third purchase |
+| S4: Infrequent, inactive customers | 1,575 | 183 days / 1 / £292 | 6.5% | 90.4% | Low-cost reactivation or deprioritise |
+
+**How the k = 2 segments split at k = 4:**
+
+| k = 4 segment | from k = 2 S1 (High-value active) | from k = 2 S2 (Infrequent, inactive) |
+|---|---:|---:|
+| S1: High-value active | 708 | 0 |
+| S2: Historically valuable, currently inactive | 699 (£1,445,208) | 465 (£521,757) |
+| S3: Recent, low-activity | 251 | 626 |
+| S4: Infrequent, inactive | 0 | 1,575 |
+
+**Interpretation.**
+
+1. k = 2 is the statistically cleaner split, and a valid headline: a minority of
+   repeat, recent customers holds most of the value.
+2. Its "High-value active" label is too broad for action. 699 of its 1,658
+   customers (42%), holding £1.45m, are by their own medians no longer active.
+   They have a median recency of 54 days, against 9 days for the core group.
+3. k = 4 separates lapse risk far more sharply (0% to 90%, against 7% to 62%).
+   It isolates three groups that call for different handling, plus a
+   win-back-review list of 1,164 customers with £1.97m of past value. That
+   group doesn't exist as a unit at k = 2.
+4. The cost is weaker separation (silhouette 0.337, about 0.10 lower), so k = 4
+   segment boundaries should be treated as softer.
+
+**Recommended presentation:**
+- Report k = 2 as the statistical result. The selection rule is unchanged and
+  remains the default.
+- Use k = 4 as the business view and say so explicitly.
+- These suggested uses are interpretations of the profiles. The data contains
+  no campaign outcomes, so their effect is untested.
 
 At **k = 3**, two segments both meet the "high-value active" naming rule, with
-medians of £3,641 and £974 at frequencies of 10 and 3. The labelling scheme
-flags this duplication. It shows that the names are coarse descriptions of
-medians.
-
-The selection rule is applied as specified (k = 2). The k = 4 profile is
-reported so the trade-off can be discussed openly. `k_override = 4` in
-`config.R` would make the dashboard use it.
+medians of £3,641 and £974 at frequencies of 10 and 3. The dashboard flags the
+duplicated name. It shows that names are coarse descriptions of medians, and
+k = 3 adds less interpretive value than k = 4.
 
 ### 3.4 Extension: rule-based RFM groups compared with K-Means
 
@@ -340,9 +376,11 @@ capacity, not empirically optimal values.
    bulk orders worth £245k that were fully reversed.
 2. Purchase value is highly concentrated. 38% of customers (S1) account for 84%
    of eligible value.
-3. Silhouette favours a two-group structure. Finer segmentations (k = 4) are
-   more informative for business use but less well separated, which is a
-   genuine trade-off.
+3. Silhouette favours a two-group structure, but k = 4 is the more useful
+   business view. It splits the broad "high-value active" group, separates
+   lapse risk much more sharply (0–90% against 7–62%) and isolates a
+   win-back-review group of 1,164 customers (£1.97m). It costs about 0.10 of
+   silhouette. The dashboard lets you switch between the two views.
 4. The personalized lapse rule and the fixed rule overlap only partly (Jaccard
    0.43). The personalized rule highlights a small, high-value set of frequent
    buyers that the fixed rule misses, and it stops flagging slow-cadence buyers

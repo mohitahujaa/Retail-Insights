@@ -218,7 +218,28 @@ The names are interpretations of observed medians, not predefined categories.
 Each segment's basis (its medians compared with the overall medians) is stored
 alongside its name.
 
-### 6.4 Extension: rule-based RFM compared with K-Means
+### 6.4 Segmentation view and business utility
+
+Every valid k is fitted once, and its assignments are stored
+(`seg$assignments`). `rp_segment_view()` returns the customers and profile for
+any k without refitting. The dashboard's top-bar selector uses it to switch
+every tab. The statistically selected k stays the default.
+
+`rp_segmentation_utility()` compares views on measures of usefulness:
+- the number of distinct suggested actions;
+- the smallest and largest segment;
+- the customer and value share of the highest-value segment;
+- the range of lapse-signal rates across segments, which shows whether the
+  segments separate lapse risk;
+- the size and value of any "historically valuable, currently inactive" group.
+
+`rp_segment_crosswalk()` shows how segments split between two values of k, and
+`rp_segmentation_insights()` turns these tables into sentences.
+
+Suggested uses (`RP_SEGMENT_USES`) are fixed interpretations of each name
+pattern. The data contains no marketing outcomes, so their effect is untested.
+
+### 6.5 Extension: rule-based RFM compared with K-Means
 
 `rp_rfm_rule_segments()` gives each customer quintile scores of 1–5 for R, F
 and M. R is reversed so that 5 means most recent, and tied values always share
