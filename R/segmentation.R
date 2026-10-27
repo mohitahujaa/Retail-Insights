@@ -233,3 +233,76 @@ rp_segment_customers <- function(customers, cfg = rp_config()) {
     )
   )
 }
+
+# Optional extension: rule-based RFM quintile scores --------------------------
+
+# Score each feature 1-5 using quintile breaks of the customer distribution.
+# Tied values always receive the same score, so a heavily tied feature (such as
+# frequency, where many customers have one invoice) may use fewer than five
+# distinct scores. Recency is reversed so that 5 = most recent.
+rp_quintile_score <- function(x, reverse = FALSE) {
+  breaks <- unique(stats::quantile(x, c(0.2, 0.4, 0.6, 0.8), names = FALSE))
+  s <- findInterval(x, breaks, left.open = TRUE) + 1L
+  if (reverse) 6L - s else s
+}
+
+rp_rfm_rule_segments <- function(customers) {
+  r <- rp_quintile_score(customers$recency, reverse = TRUE)
+  f <- rp_quintile_score(customers$frequency)
+  m <- rp_quintile_score(customers$monetary)
+  fm <- (f + m) / 2
+  rule <- dplyr::case_when(
+    r >= 4 & fm >= 4 ~ "R1: Recent, high frequency/value",
+    r >= 3 & fm >= 3 ~ "R2: Fairly recent, mid-high frequency/value",
+    r >= 4 & fm < 3 ~ "R3: Recent, low frequency/value",
+    r <= 2 & fm >= 3 ~ "R4: Not recent, mid-high frequency/value",
+    r <= 2 & fm < 3 ~ "R5: Not recent, low frequency/value",
+    TRUE ~ "R6: Middle recency, low frequency/value"
+  )
+  data.frame(
+    CustomerID = customers$CustomerID, r_score = r, f_score = f, m_score = m,
+    rfm_rule_segment = rule, stringsAsFactors = FALSE
+  )
+}
+
+# Adjusted Rand Index between two partitions (1 = identical, ~0 = chance).
+rp_adjusted_rand <- function(a, b) {
+  tab <- table(a, b)
+  comb2 <- function(x) x * (x - 1) / 2
+  sum_ij <- sum(comb2(tab))
+  sum_a <- sum(comb2(rowSums(tab)))
+  sum_b <- sum(comb2(colSums(tab)))
+  expected <- sum_a * sum_b / comb2(sum(tab))
+  max_index <- (sum_a + sum_b) / 2
+  if (max_index == expected) return(1)
+  (sum_ij - expected) / (max_index - expected)
+}
+
+rp_compare_rfm_rules <- function(seg_customers) {
+  rules <- rp_rfm_rule_segments(seg_customers)
+  joined <- dplyr::left_join(
+    seg_customers[, c("CustomerID", "segment", "recency", "frequency", "monetary")],
+    rules,
+    by = "CustomerID"
+  )
+  rule_profile <- joined |>
+    dplyr::group_by(rfm_rule_segment) |>
+    dplyr::summarise(
+      customers = dplyr::n(),
+      median_recency = stats::median(recency),
+      median_frequency = stats::median(frequency),
+      median_monetary = stats::median(monetary),
+      total_value = sum(monetary), .groups = "drop"
+    ) |>
+    dplyr::mutate(share_customers = customers / sum(customers)) |>
+    as.data.frame()
+  crosstab <- as.data.frame.matrix(table(joined$rfm_rule_segment, joined$segment))
+  list(
+    customers = joined, rule_profile = rule_profile, crosstab = crosstab,
+    adjusted_rand = rp_adjusted_rand(joined$rfm_rule_segment, joined$segment),
+    score_levels = c(
+      r = length(unique(rules$r_score)), f = length(unique(rules$f_score)),
+      m = length(unique(rules$m_score))
+    )
+  )
+}
